@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Packet Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        body {
+            text-align: center;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            background: #222;
+            display: block;
+            margin: auto;
+        }
+
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            color: white;
+        }
+
+        th,
+        td {
+            border: 1px solid #555;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background: #333;
+        }
+
+        tr:nth-child(even) {
+            background: #222;
+        }
+
+        tr:nth-child(odd) {
+            background: #1a1a1a;
+        }
+
+        input,
+        select,
+        button {
+            margin: 10px;
+            padding: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Packet Tracker</h2>
+
+    <label>Number of Nodes:</label>
+    <select id="nodeCount">
+        <option value="7">7</option>
+        <option value="9">9</option>
+        <option value="12">12</option>
+        <option value="13">13</option>
+        <option value="17">17</option>
+    </select>
+
+    <label>Channel Probability:</label>
+    <select id="channelProbability">
+        <option value="30">30%</option>
+        <option value="40">40%</option>
+        <option value="50">50%</option>
+    </select>
+
+    <label>Source:</label>
+    <select id="source"></select>
+
+    <label>Destination:</label>
+    <select id="destination"></select>
+
+    <label>Amount:</label>
+    <select id="amount">
+        <option value="1000000">1m</option>
+        <option value="5000000">5m</option>
+        <option value="10000000">10m</option>
+        <option value="50000000">50m</option>
+        <option value="100000000">100m</option>
+        <option value="200000000">200m</option>
+    </select>
+
+    <button onclick="generateNetwork()">Generate Network</button>
+    <button onclick="startTracking()">Start</button>
+
+    <canvas id="networkCanvas" width="800" height="600"></canvas>
+
+    <h3>Transaction Log</h3>
+    <table id="logTable">
+        <thead>
+            <tr>
+                <th>Attempt</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Amount (sats)</th>
+                <th>Status</th>
+                <th>Fees (sats)</th>
+                <th>Path</th>
+                <th>Updated Balance (sats)</th>
+            </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+    </table>
+
+    <script>
+        const canvas = document.getElementById("networkCanvas");
+        const ctx = canvas.getContext("2d");
+        let nodes = {};
+        let connections = {};
+        let balances = {};
+        let attemptCount = 0;
+
+        function generateNetwork() {
+            let nodeCount = parseInt(document.getElementById("nodeCount").value);
+            let channelProbability = parseInt(document.getElementById("channelProbability").value) / 100;
+            nodes = {};
+            connections = {};
+            balances = {};
+
+            // Generate nodes
+            for (let i = 0; i < nodeCount; i++) {
+                let key = String.fromCharCode(65 + i);
+                nodes[key] = {
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: Math.random() * (canvas.height - 100) + 50
+                };
+                connections[key] = [];
+                balances[key] = 1000000000; // Initial balance of 1 billion sats per node
+            }
+
+            // Establish connections based on probability
+            let keys = Object.keys(nodes);
+            for (let i = 0; i < keys.length; i++) {
+                for (let j = i + 1; j < keys.length; j++) {
+                    if (Math.random() < channelProbability) {
+                        let from = keys[i];
+                        let to = keys[j];
+                        if (!connections[from].includes(to)) {
+                            connections[from].push(to);
+                            connections[to].push(from);
+                        }
+                    }
+                }
+            }
+
+            updateDropdowns();
+            drawNetwork();
+        }
+
+        function updateDropdowns() {
+            let sourceSelect = document.getElementById("source");
+            let destinationSelect = document.getElementById("destination");
+            sourceSelect.innerHTML = "";
+            destinationSelect.innerHTML = "";
+            Object.keys(nodes).forEach(node => {
+                sourceSelect.innerHTML += `<option value="${node}">${node}</option>`;
+                destinationSelect.innerHTML += `<option value="${node}">${node}</option>`;
+            });
+        }
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.strokeStyle = "lightblue";
+            ctx.lineWidth = 2;
+
+            // Draw connections
+            for (let from in connections) {
+                connections[from].forEach(to => {
+                    ctx.beginPath();
+                    ctx.moveTo(nodes[from].x, nodes[from].y);
+                    ctx.lineTo(nodes[to].x, nodes[to].y);
+                    ctx.stroke();
+                });
+            }
+
+            // Draw nodes
+            for (const key in nodes) {
+                const node = nodes[key];
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "black";
+                ctx.fillText(key, node.x - 5, node.y + 5);
+                ctx.fillStyle = "white";
+            }
+        }
+
+        function findShortestPath(source, destination) {
+            let queue = [[source]];
+            let visited = new Set();
+            visited.add(source);
+
+            while (queue.length > 0) {
+                let path = queue.shift();
+                let lastNode = path[path.length - 1];
+
+                if (lastNode === destination) {
+                    return path;
+                }
+
+                for (let neighbor of connections[lastNode]) {
+                    if (!visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        queue.push([...path, neighbor]);
+                    }
+                }
+            }
+            return null;
+        }
+
+        function logTransaction(from, to, amount, status, path, fees, updatedBalance) {
+            let logBody = document.getElementById("logBody");
+            let row = `
+                <tr>
+                    <td>${attemptCount}</td>
+                    <td>${from}</td>
+                    <td>${to}</td>
+                    <td>${amount.toLocaleString()} sats</td>
+                    <td>${status}</td>
+                    <td>${fees.toLocaleString()} sats</td>
+                    <td>${path.join(" → ")}</td>
+                    <td>${updatedBalance.toLocaleString()} sats</td>
+                </tr>`;
+            logBody.innerHTML += row;
+        }
+
+        function movePacket(path, amount) {
+            let fromNode = path[0];
+            let toNode = path[path.length - 1];
+            let fees = Math.floor(amount * 0.01); // 1% fee in sats
+            let netAmount = amount - fees;
+
+            if (balances[fromNode] >= amount) {
+                balances[fromNode] -= amount;
+                balances[toNode] += netAmount;
+                attemptCount++;
+                logTransaction(fromNode, toNode, amount, "Success", path, fees, balances[toNode]);
+            } else {
+                attemptCount++;
+                logTransaction(fromNode, toNode, amount, "Failed - Insufficient Balance", path, 0, balances[fromNode]);
+                return; // Stop animation if transaction fails
+            }
+
+            // Animation for a single dot
+            let progress = 0;
+            let stepIndex = 0;
+
+            function movePacketStep() {
+                drawNetwork(); // Clear and redraw network
+
+                if (stepIndex < path.length - 1) {
+                    let from = nodes[path[stepIndex]];
+                    let to = nodes[path[stepIndex + 1]];
+                    let x = from.x + (to.x - from.x) * progress;
+                    let y = from.y + (to.y - from.y) * progress;
+
+                    ctx.fillStyle = "yellow";
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    progress += 0.02;
+
+                    if (progress >= 1) {
+                        progress = 0;
+                        stepIndex++; // Move to the next node
+                    }
+
+                    requestAnimationFrame(movePacketStep);
+                }
+            }
+
+            movePacketStep();
+        }
+
+        function startTracking() {
+            let source = document.getElementById("source").value;
+            let destination = document.getElementById("destination").value;
+            let amount = parseInt(document.getElementById("amount").value); // Amount in sats
+
+            if (source !== destination) {
+                let path = findShortestPath(source, destination);
+                if (path) {
+                    movePacket(path, amount);
+                } else {
+                    alert("No available path between selected nodes.");
+                }
+            } else {
+                alert("Source and destination cannot be the same.");
+            }
+        }
+
+        // Initial network generation on load
+        generateNetwork();
+    </script>
+</body>
+
+</html>
